@@ -5,6 +5,8 @@
 
 This integration allows you to monitor [Waveshare UPS Hat (E)](https://www.waveshare.com/wiki/UPS_HAT_(E)) status in your Home Assistant instance.
 
+<img src="https://www.waveshare.com/w/upload/thumb/7/73/UPS-HAT-E-1.jpg/600px-UPS-HAT-E-1.jpg" width="400" />
+
 
 
 ## Installation
@@ -36,7 +38,10 @@ Create a new sensor entry in your `configuration.yaml`
 sensor:
   - platform: ups_hat_e
     name: UPS                    # Optional
+    addr: 0x2d                   # Optional
     unique_id: waveshare_ups     # Optional
+    scan_interval: 20            # Optional
+    battery_capacity: 4800       # Optional
 ```
 Following data can be read:
  - Charger Voltage
@@ -107,12 +112,12 @@ It will output a table like this:
      0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
 00:          -- -- -- -- -- -- -- -- -- -- -- -- --
 10: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
-20: -- -- -- 23 -- -- -- -- -- -- -- -- -- -- -- --
+20: -- -- -- -- -- -- -- -- -- -- -- -- -- 2d -- --
 30: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
-40: 40 -- -- -- -- -- UU -- -- -- -- -- -- -- -- --
+40: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 60: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
-70: -- -- -- -- -- -- -- 77
+70: -- -- -- -- -- -- -- --
 ```
 
 ## License
