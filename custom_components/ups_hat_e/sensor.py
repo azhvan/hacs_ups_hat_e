@@ -1,10 +1,12 @@
 """UPS Hat E sensors."""
 
 import logging
+import os
+import voluptuous as vol
 
 from homeassistant import core
-from homeassistant.components.sensor import SensorEntity
-from homeassistant.components.sensor.const import SensorDeviceClass, SensorStateClass
+from homeassistant.components.sensor import SensorEntity, PLATFORM_SCHEMA, SensorDeviceClass
+# from homeassistant.components.sensor.const import SensorDeviceClass, SensorStateClass
 from homeassistant.const import (
     PERCENTAGE,
     UnitOfElectricCurrent,
@@ -12,196 +14,149 @@ from homeassistant.const import (
     UnitOfEnergy,
     UnitOfPower,
     UnitOfTime,
+    CONF_NAME,
+    CONF_UNIQUE_ID,
 )
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
+import homeassistant.helpers.config_validation as cv
+
 from .coordinator import UpsHatECoordinator
-from .entity import UpsHatEEntity
+
+from .const import (
+    CONF_ADDR,
+    CONF_BATTERY_CAPACITY,
+    DEFAULT_ADDR,
+    DEFAULT_NAME,
+    DEFAULT_UNIQUE_ID,
+    LOW_BATTERY_PERCENTAGE,
+    CONF_MAX_SOC
+)
 
 _LOGGER = logging.getLogger(__name__)
 
+ATTR_CAPACITY = "capacity"
+ATTR_SOC = "soc"
+ATTR_PSU_VOLTAGE = "psu_voltage"
+ATTR_CHARGER_VOLTAGE = "charger_voltage"
+ATTR_BATTERY_VOLTAGE = "battery_voltage"
+ATTR_BATTERY_CURRENT = "battery_current"
+ATTR_CHARGER_CURRENT = "charger_current"
+ATTR_POWER = "power"
+ATTR_CHARGING = "charging"
+ATTR_ONLINE = "online"
+ATTR_BATTERY_CONNECTED = "battery_connected"
+ATTR_LOW_BATTERY = "low_battery"
+ATTR_POWER_CALCULATED = "power_calculated"
+ATTR_REMAINING_BATTERY_CAPACITY = "remaining_battery_capacity"
+ATTR_REMAINING_TIME = "remaining_time_min"
+ATTR_STATE = "state"
+ATTR_CELL1_VOLTAGE = "call1_voltage"
+ATTR_CELL2_VOLTAGE = "call2_voltage"
+ATTR_CELL3_VOLTAGE = "call3_voltage"
+ATTR_CELL4_VOLTAGE = "call4_voltage"
 
-async def async_setup_platform(
-    hass: core.HomeAssistant,
-    config: ConfigType,
-    async_add_entities: AddEntitiesCallback,
-    discovery_info: DiscoveryInfoType | None = None,
-) -> None:
-    # We only want this platform to be set up via discovery.
-    if discovery_info is None:
-        return
+PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
+    vol.Optional(CONF_ADDR, default=DEFAULT_ADDR): cv.string,
+    vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
+    vol.Optional(CONF_UNIQUE_ID, default=DEFAULT_UNIQUE_ID): cv.string,
+    vol.Optional(CONF_BATTERY_CAPACITY, default=4800): cv.positive_int,
+    vol.Optional(CONF_MAX_SOC, default=100): cv.positive_int,
+})
 
-    coordinator = discovery_info.get("coordinator")
+def setup_platform(hass, config, add_entities, discovery_info=None):
+    """Set up the Waveshare UPS Hat sensor."""
+    name = config.get(CONF_NAME)
+    unique_id = config.get(CONF_UNIQUE_ID)
+    max_soc = config.get(CONF_MAX_SOC)
+    battery_capacity = config.get(CONF_BATTERY_CAPACITY)
+    add_entities([UpsHatE(name, unique_id, max_soc, battery_capacity)], True)
 
-    sensors = [
-        ChargerVoltageSensor(coordinator),
-        ChargerCurrentSensor(coordinator),
-        ChargerPowerSensor(coordinator),
-        BatteryVoltageSensor(coordinator),
-        BatteryCurrentSensor(coordinator),
-        SocSensor(coordinator),
-        RemainingCapacitySensor(coordinator),
-        RemainingTimeSensor(coordinator),
-        Cell1VoltageSensor(coordinator),
-        Cell2VoltageSensor(coordinator),
-        Cell3VoltageSensor(coordinator),
-        Cell4VoltageSensor(coordinator),
-    ]
-    async_add_entities(sensors)
-
-
-class UpsHatESensor(UpsHatEEntity, SensorEntity):
-    """Base sensor."""
-
-    def __init__(self, coordinator: UpsHatECoordinator) -> None:
-        super().__init__(coordinator)
-        self._attr_suggested_display_precision = 3
-
-
-class ChargerVoltageSensor(UpsHatESensor):
-    def __init__(self, coordinator) -> None:
-        super().__init__(coordinator)
-        self._name = "Charger Voltage"
-        self._attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
-        self._attr_device_class = SensorDeviceClass.VOLTAGE
-
-    @property
-    def native_value(self):
-        return self._coordinator.data["charger_voltage"]
-
-
-class ChargerCurrentSensor(UpsHatESensor):
-    def __init__(self, coordinator) -> None:
-        super().__init__(coordinator)
-        self._name = "Charger Current"
-        self._attr_native_unit_of_measurement = UnitOfElectricCurrent.MILLIAMPERE
-        self._attr_device_class = SensorDeviceClass.CURRENT
+class UpsHatE(SensorEntity):
+    """Representation of a Waveshare UPS Hat."""
+    def __init__(self, name, unique_id=None, max_soc=None, battery_capacity=None):
+        """Initialize the sensor."""
+        self._name = name
+        self._unique_id = unique_id
+        if max_soc > 100:
+            max_soc = 100
+        elif max_soc < 1:
+            max_soc = 1
+        self._max_soc = max_soc
+        self._battery_capacity = battery_capacity
+        self._upsHatE = UpsHatECoordinator(addr=0x2d)
+        self._attrs = {}
 
     @property
-    def native_value(self):
-        return self._coordinator.data["charger_current"]
-
-
-class ChargerPowerSensor(UpsHatESensor):
-    def __init__(self, coordinator) -> None:
-        super().__init__(coordinator)
-        self._name = "Charger Power"
-        self._attr_native_unit_of_measurement = UnitOfPower.WATT
-        self._attr_device_class = SensorDeviceClass.POWER
+    def name(self):
+        """Return the name of the sensor."""
+        return self._name
 
     @property
-    def native_value(self):
-        return self._coordinator.data["charger_power"]
-
-
-class BatteryVoltageSensor(UpsHatESensor):
-    def __init__(self, coordinator) -> None:
-        super().__init__(coordinator)
-        self._name = "Battery Voltage"
-        self._attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
-        self._attr_device_class = SensorDeviceClass.VOLTAGE
+    def device_class(self):
+        """Return the device class of the sensor."""
+        return SensorDeviceClass.BATTERY
 
     @property
-    def native_value(self):
-        return self._coordinator.data["battery_voltage"]
-
-
-class BatteryCurrentSensor(UpsHatESensor):
-    def __init__(self, coordinator) -> None:
-        super().__init__(coordinator)
-        self._name = "Battery Current"
-        self._attr_native_unit_of_measurement = UnitOfElectricCurrent.MILLIAMPERE
-        self._attr_device_class = SensorDeviceClass.CURRENT
+    def state(self):
+        """Return the state of the sensor."""
+        return self._attrs.get(ATTR_SOC)
 
     @property
-    def native_value(self):
-        return self._coordinator.data["battery_current"]
-
-
-class SocSensor(UpsHatESensor):
-    def __init__(self, coordinator) -> None:
-        super().__init__(coordinator)
-        self._name = "SoC"
-        self._attr_native_unit_of_measurement = PERCENTAGE
-        self._attr_device_class = SensorDeviceClass.BATTERY
-        self._attr_suggested_display_precision = 1
+    def unit_of_measurement(self):
+        """Return the unit the value is expressed in."""
+        return PERCENTAGE
 
     @property
-    def native_value(self):
-        return self._coordinator.data["soc"]
-
-
-class RemainingCapacitySensor(UpsHatESensor):
-    def __init__(self, coordinator) -> None:
-        super().__init__(coordinator)
-        self._name = "Remaining Capacity"
-        self._attr_native_unit_of_measurement = UnitOfEnergy.WATT_HOUR
-        self._attr_device_class = SensorDeviceClass.ENERGY_STORAGE
-        self._attr_suggested_display_precision = 0
+    def extra_state_attributes(self):
+        """Return the state attributes of the sensor."""
+        return self._attrs
 
     @property
-    def native_value(self):
-        return self._coordinator.data["remaining_battery_capacity"]
+    def unique_id(self):
+        """Return the unique id of the sensor."""
+        return self._unique_id
 
+    def update(self):
+        """Get the latest data and update the states."""
+        upsHatE = self._upsHatE
+        charger_voltage = upsHatE.getChargingVoltage()
+        charger_current = upsHatE.getChargingCurrent()
+        charger_power = upsHatE.getChargingPower()
+        battery_voltage = upsHatE.getBatteryVoltage()
+        battery_current = upsHatE.getBatteryCurrent()
+        soc = upsHatE.getBatterySOC()
+        remaining_battery_capacity = upsHatE.getBatteryRemainingCapacity()
+        remaining_time = upsHatE.getBatteryRemainingTime()
+        cell1_voltage = upsHatE.getCell1Voltage()
+        cell2_voltage = upsHatE.getCell2Voltage()
+        cell3_voltage = upsHatE.getCell3Voltage()
+        cell4_voltage = upsHatE.getCell4Voltage()
+        state = upsHatE.getChargingState()
+        online = upsHatE.getOnlineStatus()
+        charging = upsHatE.getChargingStatus()
+        low_battery = online and soc < LOW_BATTERY_PERCENTAGE
+        power_calculated = charger_voltage * (charger_current / 1000)
 
-class RemainingTimeSensor(UpsHatESensor):
-    def __init__(self, coordinator) -> None:
-        super().__init__(coordinator)
-        self._name = "Remaining Time"
-        self._attr_native_unit_of_measurement = UnitOfTime.MINUTES
-        self._attr_device_class = SensorDeviceClass.DURATION
-        self._attr_state_class = SensorStateClass.TOTAL_INCREASING
-        self._attr_suggested_display_precision = 0
-
-    @property
-    def native_value(self):
-        return self._coordinator.data["remaining_time"]
-
-
-class Cell1VoltageSensor(UpsHatESensor):
-    def __init__(self, coordinator) -> None:
-        super().__init__(coordinator)
-        self._name = "Cell1 Voltage"
-        self._attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
-        self._attr_device_class = SensorDeviceClass.VOLTAGE
-
-    @property
-    def native_value(self):
-        return self._coordinator.data["cell1_voltage"]
-
-
-class Cell2VoltageSensor(UpsHatESensor):
-    def __init__(self, coordinator) -> None:
-        super().__init__(coordinator)
-        self._name = "Cell2 Voltage"
-        self._attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
-        self._attr_device_class = SensorDeviceClass.VOLTAGE
-
-    @property
-    def native_value(self):
-        return self._coordinator.data["cell2_voltage"]
-
-
-class Cell3VoltageSensor(UpsHatESensor):
-    def __init__(self, coordinator) -> None:
-        super().__init__(coordinator)
-        self._name = "Cell3 Voltage"
-        self._attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
-        self._attr_device_class = SensorDeviceClass.VOLTAGE
-
-    @property
-    def native_value(self):
-        return self._coordinator.data["cell3_voltage"]
-
-
-class Cell4VoltageSensor(UpsHatESensor):
-    def __init__(self, coordinator) -> None:
-        super().__init__(coordinator)
-        self._name = "Cell4 Voltage"
-        self._attr_native_unit_of_measurement = UnitOfElectricPotential.VOLT
-        self._attr_device_class = SensorDeviceClass.VOLTAGE
-
-    @property
-    def native_value(self):
-        return self._coordinator.data["cell4_voltage"]
+        self._attrs = {
+            ATTR_SOC: round(soc, 0),
+            ATTR_CAPACITY: round(soc, 0),
+            # ATTR_PSU_VOLTAGE:,
+            ATTR_CHARGER_VOLTAGE: round(charger_voltage, 5),
+            ATTR_CHARGER_CURRENT: round(charger_current, 5),
+            ATTR_BATTERY_VOLTAGE: round(battery_voltage, 5),
+            ATTR_BATTERY_CURRENT: round(battery_current, 5),
+            ATTR_POWER: round(charger_power, 5),
+            ATTR_CHARGING: charging,
+            ATTR_ONLINE: online,
+            ATTR_LOW_BATTERY: low_battery,
+            ATTR_POWER_CALCULATED: round(power_calculated, 5),
+            ATTR_REMAINING_BATTERY_CAPACITY: remaining_battery_capacity,
+            ATTR_REMAINING_TIME: remaining_time,
+            ATTR_STATE: state,
+            ATTR_CELL1_VOLTAGE: round(cell1_voltage, 5),
+            ATTR_CELL2_VOLTAGE: round(cell2_voltage, 5),
+            ATTR_CELL3_VOLTAGE: round(cell3_voltage, 5),
+            ATTR_CELL4_VOLTAGE: round(cell4_voltage, 5)
+        }

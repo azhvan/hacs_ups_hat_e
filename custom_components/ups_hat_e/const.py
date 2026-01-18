@@ -7,20 +7,6 @@ DEFAULT_NAME = "HA Pi UPS"
 
 CONF_ADDR = "addr"
 CONF_BATTERY_CAPACITY = "battery_capacity"
-CONF_SCAN_INTERVAL = "scan_interval"
+CONF_MAX_SOC = 'max_soc'
 
-ATTR_CAPACITY = "capacity"
-ATTR_SOC = "soc"
-ATTR_PSU_VOLTAGE = "psu_voltage"
-ATTR_CHARGER_VOLTAGE = "charger_voltage"
-ATTR_BATTERY_VOLTAGE = "battery_voltage"
-ATTR_BATTERY_CURRENT = "battery_current"
-ATTR_CHARGER_CURRENT = "charger_current"
-ATTR_POWER = "power"
-ATTR_CHARGING = "charging"
-ATTR_ONLINE = "online"
-ATTR_BATTERY_CONNECTED = "battery_connected"
-ATTR_LOW_BATTERY = "low_battery"
-ATTR_POWER_CALCULATED = "power_calculated"
-ATTR_REMAINING_BATTERY_CAPACITY = "remaining_battery_capacity"
-ATTR_REMAINING_TIME = "remaining_time_min"
+LOW_BATTERY_PERCENTAGE = 20

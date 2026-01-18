@@ -1,11 +1,11 @@
 {
   "domain": "ups_hat_e",
   "name": "Waveshare UPS Hat (E)",
+  "loggers": ["ups_hat_e"],
   "integration_type": "device",
   "requirements": ["smbus2>=0.4.2"],
   "documentation": "https://github.com/azhvan/hacs_ups_hat_e",
   "issue_tracker": "https://github.com/azhvan/hacs_ups_hat_e/issues",
   "codeowners": ["@azhvan"],
-  "loggers": ["ups_hat_e"],
-  "version": "0.0.2"
+  "version": "0.1.0"
 }
